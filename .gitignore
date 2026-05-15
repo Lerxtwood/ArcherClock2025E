@@ -3,3 +3,6 @@
 test/
 lib/
 include/
+*.bin
+temp_*.py
+extract_*.py

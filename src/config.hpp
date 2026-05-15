@@ -1,8 +1,16 @@
 #define FIRM_VERSION 0.8
 
-// Wi-Fi credentials
-const char* ssid = "lerxt1";
-const char* password = "thisisatest";
+// Wi-Fi credentials are configured at runtime from the clock's setup page
+// and stored in ESP32 non-volatile storage.
+#define CONFIG_AP_SSID_PREFIX "ArcherClock-"
+#define CONFIG_AP_PASSWORD ""   // Leave empty for an open setup AP.
+
+// OTA updates require the clock to stay connected to Wi-Fi after time sync.
+#define ENABLE_OTA
+#define OTA_HOSTNAME "archer-clock"
+#define OTA_PASSWORD ""         // Optional. Set at build time or here if desired.
+
+#define WIFI_CONNECT_TIMEOUT_MS 20000
 
 #define LED_PIN   16
 #define NUM_LEDS  132
