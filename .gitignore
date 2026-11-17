@@ -1,8 +1,6 @@
 .pio
 .vscode/
-test/
-lib/
-include/
+__pycache__/
 *.bin
 temp_*.py
 extract_*.py
