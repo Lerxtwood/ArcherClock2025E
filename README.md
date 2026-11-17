@@ -33,6 +33,8 @@ The installer workflow copies full-install images from GitHub Releases into the 
 
 For browser installs, the workflow splits each factory image into bootloader, partition table, OTA initialization, and application files. The manifest writes only those sections and leaves the ESP32 NVS settings partition (`0x9000`–`0xDFFF`) untouched. Keep **Erase device** unchecked to retain Wi-Fi credentials, theme brightness, and all saved display and schedule settings. Selecting **Erase device** clears them. The workflow validates the partition layout and refuses images whose layout would make preservation unsafe.
 
+[v0.9.1](https://github.com/Lerxtwood/ArcherClock2025E/releases/tag/v0.9.1) also removes the repeated animation timing numbers from the serial console. Select this release in the refreshed installer to test both fixes. The updated flash layout also preserves settings when installing v0.9.0; settings erased by an earlier installation must be entered again.
+
 ### Enable hosting and publish firmware
 
 1. Push the installer files and workflows to the repository's default branch.
