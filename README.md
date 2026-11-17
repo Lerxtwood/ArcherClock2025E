@@ -31,6 +31,8 @@ At startup, the clock displays its installed version for five seconds before Wi-
 
 The installer in `web/flash/` uses ESP Web Tools to install firmware over USB on the WEMOS D1 Mini ESP32. It lists up to 12 compatible GitHub Releases, defaults to the newest stable version, and labels prereleases. Install with a USB data cable using desktop Chrome or Edge over HTTPS (or localhost).
 
+The release-notes panel updates with the selected firmware version. Notes are copied from GitHub Releases during site deployment and displayed on the installer page, with a link to the original release. Releases without notes show an explicit empty state.
+
 The installer workflow copies full-install images from GitHub Releases into the Pages site. Manifests and firmware are served from the same origin, so browser flashing does not depend on cross-origin GitHub asset downloads. Older releases without `archer-clock-factory.bin` are excluded. Repository links and release discovery use the repository running the workflow, so forks need no hardcoded owner changes.
 
 For browser installs, the workflow splits each factory image into bootloader, partition table, OTA initialization, and application files. The manifest writes only those sections and leaves the ESP32 NVS settings partition (`0x9000`–`0xDFFF`) untouched. Keep **Erase device** unchecked to retain Wi-Fi credentials, theme brightness, and all saved display and schedule settings. Selecting **Erase device** clears them. The workflow validates the partition layout and refuses images whose layout would make preservation unsafe.

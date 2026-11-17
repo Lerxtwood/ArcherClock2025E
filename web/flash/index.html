@@ -33,11 +33,15 @@
           <p slot="not-allowed" class="notice">Open this installer over HTTPS or localhost to connect by USB.</p>
         </esp-web-install-button>
         <p id="tools-status" role="status" hidden></p>
-        <div class="downloads"><a id="notes-link" hidden>Release notes ↗</a><a id="factory-link" hidden download>Factory image ↓</a><a id="ota-link" hidden>OTA image ↓</a></div>
+        <div class="downloads"><a id="notes-link" hidden>Release notes ↓</a><a id="factory-link" hidden download>Factory image ↓</a><a id="ota-link" hidden>OTA image ↓</a></div>
         <button id="retry-button" class="secondary" type="button" hidden>Try again</button>
         <p class="fine">Leave “Erase device” unchecked to keep Wi-Fi credentials, themes, and display settings. Select it for a fresh start that clears all saved settings.</p>
       </section>
     </div>
+    <section id="release-notes" class="panel release-notes" aria-labelledby="release-notes-title" hidden>
+      <div class="notes-header"><h2 id="release-notes-title">Release notes</h2><a id="notes-source">View on GitHub ↗</a></div>
+      <div id="release-notes-body" class="notes-body" aria-live="polite"></div>
+    </section>
     <section class="steps" aria-label="Installation steps">
       <article><span>01 / CONNECT</span><h2>Plug in over USB.</h2><p>Use a data cable and close serial monitors. If connection stalls, hold BOOT while connecting, then release it.</p></article>
       <article><span>02 / INSTALL</span><h2>Choose your release.</h2><p>Select a version, click Connect &amp; install, and choose the clock’s serial port. Keep it plugged in until installation completes.</p></article>

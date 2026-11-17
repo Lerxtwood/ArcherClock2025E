@@ -127,6 +127,18 @@ class InstallerTests(unittest.TestCase):
             index = self.build(Path(directory), [release("v3"), release("v2"), release("v1")], limit=2)
             self.assertEqual(len(index["releases"]), 2)
 
+    def test_notes_stay_with_their_selected_release(self):
+        with tempfile.TemporaryDirectory() as directory:
+            beta = release("v2-rc1", prerelease=True)
+            beta["body"] = "### Preview\n\n- Test the new display."
+            stable = release("v1")
+            stable["body"] = "### Stable\n\nKeep **Erase device** unchecked."
+            empty = release("v0")
+            empty["body"] = None
+            index = self.build(Path(directory), [beta, stable, empty])
+            self.assertEqual([(entry["tag"], entry["notes"]) for entry in index["releases"]],
+                             [("v1", stable["body"]), ("v0", ""), ("v2-rc1", beta["body"])])
+
 
 if __name__ == "__main__":
     unittest.main()

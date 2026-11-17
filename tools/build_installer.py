@@ -104,6 +104,7 @@ def build_site(site, repository, limit=12):
             "prerelease": bool(release.get("prerelease")),
             "published": release.get("published_at"),
             "url": release["html_url"],
+            "notes": release.get("body") or "",
             "manifest": path + "/manifest.json",
             "factory": path + "/" + FACTORY_IMAGE,
             "ota": assets.get(OTA_IMAGE, {}).get("browser_download_url"),
