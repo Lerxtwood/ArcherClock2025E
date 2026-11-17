@@ -25,6 +25,8 @@ The Settings page includes a Brightness section below Themes. Global LED brightn
 
 ## Browser Firmware Installer
 
+[Open the hosted firmware installer](https://lerxtwood.github.io/ArcherClock2025E/) · [GitHub Releases](https://github.com/Lerxtwood/ArcherClock2025E/releases)
+
 The installer in `web/flash/` uses ESP Web Tools to install firmware over USB on the WEMOS D1 Mini ESP32. It lists up to 12 compatible GitHub Releases, defaults to the newest stable version, and labels prereleases. Install with a USB data cable using desktop Chrome or Edge over HTTPS (or localhost).
 
 The installer workflow copies full-install images from GitHub Releases into the Pages site. Manifests and firmware are served from the same origin, so browser flashing does not depend on cross-origin GitHub asset downloads. Older releases without `archer-clock-factory.bin` are excluded. Repository links and release discovery use the repository running the workflow, so forks need no hardcoded owner changes.
