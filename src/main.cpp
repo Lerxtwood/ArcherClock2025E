@@ -29,11 +29,9 @@
 #include <WiFi.h>
 
 
-//#define DEBUG_NIGHT_MODE
-
 typedef enum {
 MODE_DAY = 0,
-MODE_NIGHT = 1
+MODE_SCHEDULED = 1
 } display_mode;
 
 CRGB leds[NUM_LEDS];
@@ -44,6 +42,9 @@ DNSServer dnsServer;
 uint8_t seconds = 0;
 uint8_t minutes = 0;
 uint8_t hours = 0;
+uint8_t trailSeconds = 0;
+uint8_t trailMinutes = 0;
+uint8_t trailHours = 0;
 uint8_t syncCountdown = SYNC_TIME;
 bool switchModes = false;
 display_mode currentMode = MODE_DAY;
@@ -53,12 +54,14 @@ bool webServerStarted = false;
 bool otaStarted = false;
 #endif
 
-#ifdef ENABLE_NIGHT_MODE
-bool nightModeEnabled = true;
-#else
-bool nightModeEnabled = false;
-#endif
-uint8_t nightModeStartHour = NIGHT_MODE_START_HOUR;
+bool scheduledThemeEnabled = SCHEDULED_THEME_ENABLED;
+uint8_t scheduledThemeStartHour = SCHEDULED_THEME_START_HOUR;
+uint8_t scheduledThemeEndHour = SCHEDULED_THEME_END_HOUR;
+String scheduledThemeId = SCHEDULED_THEME_ID;
+String configuredThemeId;
+uint8_t configuredGlobalLEDBrightness = GLOBAL_LED_BRIGHTNESS;
+uint8_t configuredMarkerLEDBrightness = MARKER_LED_BRIGHTNESS;
+bool configuredAnimateSecondHand = ANIMATE_SECOND_HAND;
 bool configuredShowSecondsMarkers = SHOW_SECONDS_MARCKERS;
 bool configuredShowMinutesMarkers = SHOW_MINUTES_MARCKERS;
 bool configuredShowHoursMarkers = SHOW_HOURS_MARCKERS;
@@ -69,6 +72,14 @@ CRGB configuredHoursMarkersColor = HOURS_MARCKERS_COLOR;
 CRGB configuredSecondsHandColor = SECONDS_HAND_COLOR;
 CRGB configuredMinutesHandColor = MINUTES_HAND_COLOR;
 CRGB configuredHoursHandColor = HOURS_HAND_COLOR;
+bool configuredTimeTrailEnabled = TIME_TRAIL_ENABLED;
+CRGB configuredTimeTrailSecondsColor = TIME_TRAIL_SECONDS_COLOR;
+CRGB configuredTimeTrailMinutesColor = TIME_TRAIL_MINUTES_COLOR;
+CRGB configuredTimeTrailHoursColor = TIME_TRAIL_HOURS_COLOR;
+bool timeTrailEnabled = TIME_TRAIL_ENABLED;
+CRGB timeTrailSecondsColor = TIME_TRAIL_SECONDS_COLOR;
+CRGB timeTrailMinutesColor = TIME_TRAIL_MINUTES_COLOR;
+CRGB timeTrailHoursColor = TIME_TRAIL_HOURS_COLOR;
 
 // SETTINGS
 // Brightness
@@ -103,6 +114,28 @@ struct NamedColor {
   uint32_t value;
 };
 
+struct ThemePreset {
+  const char* id;
+  const char* name;
+  bool showHours;
+  bool showMinutes;
+  bool showSeconds;
+  bool animateSeconds;
+  bool timeTrail;
+  uint32_t zeroMarker;
+  uint32_t secondsMarkers;
+  uint32_t minutesMarkers;
+  uint32_t hoursMarkers;
+  uint32_t secondsHand;
+  uint32_t minutesHand;
+  uint32_t hoursHand;
+  uint32_t timeTrailSeconds;
+  uint32_t timeTrailMinutes;
+  uint32_t timeTrailHours;
+  uint8_t globalBrightness;
+  uint8_t markerBrightness;
+};
+
 const NamedColor LED_COLOR_OPTIONS[] = {
   {"Red", 0xFF0000},
   {"Orange", 0xFF8000},
@@ -117,6 +150,20 @@ const NamedColor LED_COLOR_OPTIONS[] = {
   {"Pink", 0xFF66CC},
   {"Warm White", 0xFFC080},
   {"White", 0xFFFFFF}
+};
+
+ThemePreset THEME_PRESETS[] = {
+  {"classicCorpus", "Classic Corpus", true, true, true, true, false, 0xFF0000, 0x0000FF, 0x0000FF, 0x0000FF, 0xFFD700, 0xFFD700, 0xFFD700, 0x00FF00, 0x00FFFF, 0x8000FF, GLOBAL_LED_BRIGHTNESS, MARKER_LED_BRIGHTNESS},
+  {"solarFlare", "Solar Flare", true, true, true, true, true, 0xFF0000, 0xFF8000, 0xFFBF00, 0xFF8000, 0xFFD700, 0xFFD700, 0xFFD700, 0xFFFF00, 0xFF8000, 0xFF0000, GLOBAL_LED_BRIGHTNESS, MARKER_LED_BRIGHTNESS},
+  {"deepSpace", "Deep Space", true, true, true, true, true, 0xFFFFFF, 0x0000FF, 0x0000FF, 0x8000FF, 0x00FFFF, 0x00FFFF, 0x00FFFF, 0x0000FF, 0x8000FF, 0x00FFFF, GLOBAL_LED_BRIGHTNESS, MARKER_LED_BRIGHTNESS},
+  {"aurora", "Aurora", true, true, true, true, true, 0x00FF00, 0x00FFFF, 0x00FFFF, 0x0000FF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x00FF00, 0x00FFFF, 0x0000FF, GLOBAL_LED_BRIGHTNESS, MARKER_LED_BRIGHTNESS},
+  {"synthwave", "Synthwave", true, true, true, true, true, 0xFF00FF, 0x8000FF, 0x8000FF, 0xFF00FF, 0x00FFFF, 0x00FFFF, 0x00FFFF, 0xFF66CC, 0xFF00FF, 0x0000FF, GLOBAL_LED_BRIGHTNESS, MARKER_LED_BRIGHTNESS},
+  {"ember", "Ember", true, true, false, true, true, 0xFFBF00, 0xFF0000, 0xFF8000, 0xFF0000, 0xFF8000, 0xFF8000, 0xFF8000, 0xFF0000, 0xFF8000, 0xFFD700, GLOBAL_LED_BRIGHTNESS, MARKER_LED_BRIGHTNESS},
+  {"iceClock", "Ice Clock", true, true, true, true, true, 0x00FFFF, 0x0000FF, 0x0000FF, 0x00FFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x00FFFF, 0x0000FF, 0xFFFFFF, GLOBAL_LED_BRIGHTNESS, MARKER_LED_BRIGHTNESS},
+  {"minimal", "Minimal", true, false, false, false, false, 0xFF0000, 0x0000FF, 0x0000FF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x00FF00, 0x00FFFF, 0x8000FF, GLOBAL_LED_BRIGHTNESS, MARKER_LED_BRIGHTNESS},
+  {"trailblazer", "Trailblazer", true, true, true, true, true, 0xFFFFFF, 0x0000FF, 0x0000FF, 0x0000FF, 0xFFD700, 0xFFD700, 0xFFD700, 0x00FF00, 0x00FFFF, 0x8000FF, GLOBAL_LED_BRIGHTNESS, MARKER_LED_BRIGHTNESS},
+  {"classicNight", "Classic Night", false, false, true, false, false, 0xFF8000, 0xFF0000, 0xFF0000, 0xFF0000, 0x0000FF, 0x0000FF, 0x0000FF, 0x00FF00, 0x00FFFF, 0x8000FF, GLOBAL_LED_BRIGHTNESS, MARKER_LED_BRIGHTNESS},
+  {"stealthNight", "Stealth Night", false, false, true, false, true, 0xFF8000, 0xFF0000, 0x0000FF, 0x8000FF, 0x0000FF, 0x0000FF, 0x0000FF, 0x8000FF, 0x0000FF, 0x8000FF, GLOBAL_LED_BRIGHTNESS, MARKER_LED_BRIGHTNESS}
 };
 
 String deviceSuffix() {
@@ -207,7 +254,7 @@ void appendColorSelect(String& page, const char* id, const char* label, CRGB cur
   uint32_t selectedValue = closestPaletteColor(currentColor);
   String selectedHex = uintToHex(selectedValue);
 
-  page += F("<label for='");
+  page += F("<div class='color-field'><label for='");
   page += id;
   page += F("'>");
   page += label;
@@ -232,7 +279,51 @@ void appendColorSelect(String& page, const char* id, const char* label, CRGB cur
     page += F("</option>");
   }
 
-  page += F("</select></div>");
+  page += F("</select></div></div>");
+}
+
+ThemePreset* findThemePreset(const String& themeId) {
+  for (ThemePreset& theme : THEME_PRESETS) {
+    if (themeId == theme.id) {
+      return &theme;
+    }
+  }
+
+  return nullptr;
+}
+
+void appendThemeOptions(String& page, const String& selectedThemeId) {
+  for (const ThemePreset& theme : THEME_PRESETS) {
+    page += F("<option value='");
+    page += theme.id;
+    page += F("'");
+    if (selectedThemeId == theme.id) {
+      page += F(" selected");
+    }
+    page += F(">");
+    page += theme.name;
+    page += F("</option>");
+  }
+}
+
+void applyThemePreset(const ThemePreset& theme) {
+  globalLEDBrightness = theme.globalBrightness;
+  markerLEDBrightness = theme.markerBrightness;
+  showHoursMarkers = theme.showHours;
+  showMinutesMarkers = theme.showMinutes;
+  showSecondsMarkers = theme.showSeconds;
+  animateSecondHand = theme.animateSeconds;
+  timeTrailEnabled = theme.timeTrail;
+  zeroMarkerColor = uintToCrgb(theme.zeroMarker);
+  secondsMarkersColor = uintToCrgb(theme.secondsMarkers);
+  minutesMarkersColor = uintToCrgb(theme.minutesMarkers);
+  hoursMarkersColor = uintToCrgb(theme.hoursMarkers);
+  secondsHandColor = uintToCrgb(theme.secondsHand);
+  minutesHandColor = uintToCrgb(theme.minutesHand);
+  hoursHandColor = uintToCrgb(theme.hoursHand);
+  timeTrailSecondsColor = uintToCrgb(theme.timeTrailSeconds);
+  timeTrailMinutesColor = uintToCrgb(theme.timeTrailMinutes);
+  timeTrailHoursColor = uintToCrgb(theme.timeTrailHours);
 }
 
 bool loadWifiCredentials(String& storedSsid, String& storedPassword) {
@@ -257,9 +348,25 @@ void clearWifiCredentials() {
 }
 
 void loadDisplaySettings() {
+  // Theme IDs are stable NVS keys; pack both brightness bytes into one value.
+  preferences.begin("brightness", true);
+  for (ThemePreset& theme : THEME_PRESETS) {
+    uint16_t defaults = theme.globalBrightness | (static_cast<uint16_t>(theme.markerBrightness) << 8);
+    uint16_t saved = preferences.getUShort(theme.id, defaults);
+    theme.globalBrightness = saved & 0xFF;
+    theme.markerBrightness = saved >> 8;
+  }
+  preferences.end();
+
   preferences.begin("display", true);
-  nightModeEnabled = preferences.getBool("nightEnabled", nightModeEnabled);
-  nightModeStartHour = preferences.getUChar("nightStart", nightModeStartHour);
+  configuredThemeId = preferences.getString("theme", "");
+  configuredGlobalLEDBrightness = preferences.getUChar("globalBright", GLOBAL_LED_BRIGHTNESS);
+  configuredMarkerLEDBrightness = preferences.getUChar("markerBright", MARKER_LED_BRIGHTNESS);
+  scheduledThemeEnabled = preferences.getBool("schedEnabled", scheduledThemeEnabled);
+  scheduledThemeStartHour = preferences.getUChar("schedStart", scheduledThemeStartHour);
+  scheduledThemeEndHour = preferences.getUChar("schedEnd", scheduledThemeEndHour);
+  scheduledThemeId = preferences.getString("schedTheme", scheduledThemeId);
+  configuredAnimateSecondHand = preferences.getBool("animateSec", configuredAnimateSecondHand);
   configuredShowSecondsMarkers = preferences.getBool("showSecMark", configuredShowSecondsMarkers);
   configuredShowMinutesMarkers = preferences.getBool("showMinMark", configuredShowMinutesMarkers);
   configuredShowHoursMarkers = preferences.getBool("showHourMark", configuredShowHoursMarkers);
@@ -270,16 +377,35 @@ void loadDisplaySettings() {
   configuredSecondsHandColor = uintToCrgb(preferences.getUInt("secHandColor", crgbToUint(configuredSecondsHandColor)));
   configuredMinutesHandColor = uintToCrgb(preferences.getUInt("minHandColor", crgbToUint(configuredMinutesHandColor)));
   configuredHoursHandColor = uintToCrgb(preferences.getUInt("hourHandColor", crgbToUint(configuredHoursHandColor)));
+  configuredTimeTrailEnabled = preferences.getBool("trailEnabled", configuredTimeTrailEnabled);
+  configuredTimeTrailSecondsColor = uintToCrgb(preferences.getUInt("trailSecColor", crgbToUint(configuredTimeTrailSecondsColor)));
+  configuredTimeTrailMinutesColor = uintToCrgb(preferences.getUInt("trailMinColor", crgbToUint(configuredTimeTrailMinutesColor)));
+  configuredTimeTrailHoursColor = uintToCrgb(preferences.getUInt("trailHourColor", crgbToUint(configuredTimeTrailHoursColor)));
   preferences.end();
 
-  if (nightModeStartHour > 23) {
-    nightModeStartHour = NIGHT_MODE_START_HOUR;
+  if (findThemePreset(configuredThemeId) == nullptr) {
+    configuredThemeId = "";
+  }
+  if (scheduledThemeStartHour > 23) {
+    scheduledThemeStartHour = SCHEDULED_THEME_START_HOUR;
+  }
+  if (scheduledThemeEndHour > 23) {
+    scheduledThemeEndHour = SCHEDULED_THEME_END_HOUR;
+  }
+  if (findThemePreset(scheduledThemeId) == nullptr) {
+    scheduledThemeId = SCHEDULED_THEME_ID;
   }
 }
 
 void saveDisplaySettings(
-  bool newNightModeEnabled,
-  uint8_t newNightModeStartHour,
+  const String& newThemeId,
+  uint8_t newGlobalBrightness,
+  uint8_t newMarkerBrightness,
+  bool newScheduledThemeEnabled,
+  uint8_t newScheduledThemeStartHour,
+  uint8_t newScheduledThemeEndHour,
+  const String& newScheduledThemeId,
+  bool newAnimateSecondHand,
   bool newShowSecondsMarkers,
   bool newShowMinutesMarkers,
   bool newShowHoursMarkers,
@@ -289,11 +415,30 @@ void saveDisplaySettings(
   CRGB newHoursMarkersColor,
   CRGB newSecondsHandColor,
   CRGB newMinutesHandColor,
-  CRGB newHoursHandColor
+  CRGB newHoursHandColor,
+  bool newTimeTrailEnabled,
+  CRGB newTimeTrailSecondsColor,
+  CRGB newTimeTrailMinutesColor,
+  CRGB newTimeTrailHoursColor
 ) {
+  ThemePreset* theme = findThemePreset(newThemeId);
+  if (theme != nullptr) {
+    preferences.begin("brightness", false);
+    preferences.putUShort(theme->id, newGlobalBrightness | (static_cast<uint16_t>(newMarkerBrightness) << 8));
+    preferences.end();
+    theme->globalBrightness = newGlobalBrightness;
+    theme->markerBrightness = newMarkerBrightness;
+  }
+
   preferences.begin("display", false);
-  preferences.putBool("nightEnabled", newNightModeEnabled);
-  preferences.putUChar("nightStart", newNightModeStartHour);
+  preferences.putString("theme", newThemeId);
+  preferences.putUChar("globalBright", newGlobalBrightness);
+  preferences.putUChar("markerBright", newMarkerBrightness);
+  preferences.putBool("schedEnabled", newScheduledThemeEnabled);
+  preferences.putUChar("schedStart", newScheduledThemeStartHour);
+  preferences.putUChar("schedEnd", newScheduledThemeEndHour);
+  preferences.putString("schedTheme", newScheduledThemeId);
+  preferences.putBool("animateSec", newAnimateSecondHand);
   preferences.putBool("showSecMark", newShowSecondsMarkers);
   preferences.putBool("showMinMark", newShowMinutesMarkers);
   preferences.putBool("showHourMark", newShowHoursMarkers);
@@ -304,10 +449,20 @@ void saveDisplaySettings(
   preferences.putUInt("secHandColor", crgbToUint(newSecondsHandColor));
   preferences.putUInt("minHandColor", crgbToUint(newMinutesHandColor));
   preferences.putUInt("hourHandColor", crgbToUint(newHoursHandColor));
+  preferences.putBool("trailEnabled", newTimeTrailEnabled);
+  preferences.putUInt("trailSecColor", crgbToUint(newTimeTrailSecondsColor));
+  preferences.putUInt("trailMinColor", crgbToUint(newTimeTrailMinutesColor));
+  preferences.putUInt("trailHourColor", crgbToUint(newTimeTrailHoursColor));
   preferences.end();
 
-  nightModeEnabled = newNightModeEnabled;
-  nightModeStartHour = newNightModeStartHour;
+  configuredThemeId = newThemeId;
+  configuredGlobalLEDBrightness = newGlobalBrightness;
+  configuredMarkerLEDBrightness = newMarkerBrightness;
+  scheduledThemeEnabled = newScheduledThemeEnabled;
+  scheduledThemeStartHour = newScheduledThemeStartHour;
+  scheduledThemeEndHour = newScheduledThemeEndHour;
+  scheduledThemeId = newScheduledThemeId;
+  configuredAnimateSecondHand = newAnimateSecondHand;
   configuredShowSecondsMarkers = newShowSecondsMarkers;
   configuredShowMinutesMarkers = newShowMinutesMarkers;
   configuredShowHoursMarkers = newShowHoursMarkers;
@@ -318,67 +473,143 @@ void saveDisplaySettings(
   configuredSecondsHandColor = newSecondsHandColor;
   configuredMinutesHandColor = newMinutesHandColor;
   configuredHoursHandColor = newHoursHandColor;
+  configuredTimeTrailEnabled = newTimeTrailEnabled;
+  configuredTimeTrailSecondsColor = newTimeTrailSecondsColor;
+  configuredTimeTrailMinutesColor = newTimeTrailMinutesColor;
+  configuredTimeTrailHoursColor = newTimeTrailHoursColor;
   switchModes = true;
+}
+
+void appendPageStyles(String& page) {
+  page += F("html{min-height:100%;background:#000}body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:0;min-height:100%;color:#f5f5f7;background:linear-gradient(180deg,#161617 0%,#050505 55%,#000 100%)}");
+  page += F("*{box-sizing:border-box}.page{position:relative;max-width:760px;margin:0 auto;padding:30px 18px 48px}");
+  page += F("h1,h2,.eyebrow{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;letter-spacing:0;color:#f5f5f7;text-transform:uppercase}");
+  page += F("h1{position:relative;flex:0 0 100%;order:3;margin:0;padding-top:22px;font-size:28px;line-height:1.08;font-weight:850}");
+  page += F("h1:before{content:\"\";position:absolute;left:0;right:0;top:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.18),transparent)}");
+  page += F("h2{margin:0 0 16px;font-size:20px;line-height:1.12;font-weight:850}.eyebrow{display:inline-block;order:1;margin:0;padding:6px 12px;border:1px solid rgba(255,255,255,.16);border-radius:999px;background:rgba(255,255,255,.08);box-shadow:0 8px 24px rgba(0,0,0,.24);font-size:32px;line-height:1;font-weight:900;text-decoration:none;backdrop-filter:blur(18px)}");
+  page += F(".eyebrow:hover,.eyebrow:focus{border-color:#2997ff;background:rgba(0,113,227,.18);outline:none}.top{display:flex;flex-wrap:wrap;justify-content:space-between;gap:18px;align-items:flex-start;margin:8px 0 22px}.top>div{display:contents}");
+  page += F("nav{display:flex;order:2;gap:8px;flex-wrap:wrap;padding:5px;background:rgba(36,36,38,.72);border:1px solid rgba(255,255,255,.12);border-radius:999px;box-shadow:0 12px 32px rgba(0,0,0,.34);backdrop-filter:blur(18px)}");
+  page += F("nav a{padding:8px 13px;border-radius:999px;color:#d2d2d7;text-decoration:none;font-size:14px;font-weight:700}nav a.active,nav a:hover{color:#fff;background:#0071e3}");
+  page += F(".panel,.status,.msg{background:rgba(28,28,30,.78);border:1px solid rgba(255,255,255,.12);border-radius:8px;box-shadow:0 18px 42px rgba(0,0,0,.42);backdrop-filter:blur(20px)}.panel{padding:22px;margin-top:18px}.status,.msg{padding:13px 15px;color:#a1a1a6;line-height:1.45}");
+  page += F(".msg{color:#f5f5f7;border-color:rgba(48,209,88,.42);background:rgba(48,209,88,.14)}p{line-height:1.48}.note{color:#a1a1a6}.hint{display:grid;gap:5px;padding:13px;background:rgba(44,44,46,.82);border:1px solid rgba(255,255,255,.10);border-radius:8px;color:#a1a1a6}.hint strong{color:#f5f5f7}");
+  page += F("label{display:block;margin-top:15px;color:#f5f5f7;font-weight:700;font-size:14px}input,select{width:100%;padding:12px 13px;margin-top:7px;font-size:16px;color:#f5f5f7;background:rgba(44,44,46,.9);border:1px solid rgba(255,255,255,.16);border-radius:8px;outline:none}");
+  page += F("input:focus,select:focus{border-color:#2997ff;box-shadow:0 0 0 4px rgba(41,151,255,.18)}input[type=checkbox]{width:auto;margin:0 9px 0 0;accent-color:#0071e3}.check{display:flex;align-items:center;gap:0}.inline{display:grid;grid-template-columns:1fr 1fr;gap:12px}.inline label{min-width:0}");
+  page += F(".color-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 12px}.color-field{min-width:0}.color-row{display:grid;grid-template-columns:34px 1fr;gap:10px;align-items:center}.swatch{display:block;width:30px;height:30px;border-radius:8px;border:1px solid rgba(255,255,255,.24);box-shadow:inset 0 0 0 1px rgba(0,0,0,.35)}");
+  page += F("button,a.button{display:inline-block;border:1px solid rgba(255,255,255,.16);border-radius:999px;background:rgba(44,44,46,.9);color:#f5f5f7;padding:11px 15px;font-size:15px;font-weight:800;text-decoration:none;cursor:pointer;box-shadow:0 8px 20px rgba(0,0,0,.28)}button:hover,a.button:hover{border-color:#2997ff;color:#2997ff}button:disabled{opacity:.45;cursor:not-allowed}button:disabled:hover{border-color:rgba(255,255,255,.16);color:#f5f5f7}");
+  page += F(".primary{width:100%;margin-top:20px;background:#0071e3;border-color:#0071e3;color:white}.primary:hover{background:#0077ed;color:white}.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}.actions.single{grid-template-columns:1fr}.actions .button{width:100%;text-align:center}");
+  page += F(".uploadBox{position:relative;display:block;padding:28px 20px;margin-top:14px;text-align:center;background:rgba(44,44,46,.82);border:1px dashed rgba(255,255,255,.24);border-radius:8px;cursor:pointer}.uploadBox:hover,.uploadBox:focus-within{border-color:#2997ff;background:rgba(0,113,227,.12)}.uploadBox span{display:block;color:#f5f5f7;font-size:18px;font-weight:800}.uploadBox small{display:block;margin-top:5px;color:#a1a1a6;font-size:12px;font-weight:800;text-transform:uppercase}.uploadBox input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer}.fileStatus{margin-top:10px;color:#a1a1a6;font-size:13px;font-weight:800;overflow-wrap:anywhere}.fileStatus.ready{color:#30d158}.fileStatus.invalid{color:#ff453a}");
+  page += F("progress{width:100%;height:24px;margin-top:18px;accent-color:#0071e3}.progress-text{font-weight:800;margin-top:8px;color:#2997ff}code{color:#2997ff}script{display:none}@media(max-width:620px){.page{padding:22px 14px 36px}h1{font-size:25px}.eyebrow{font-size:28px}nav{justify-content:center}.panel{padding:18px}.inline,.color-grid,.actions{grid-template-columns:1fr}}");
+}
+
+void appendPageHeader(String& page, const char* title, const char* activePath) {
+  page += F("<header class='top'><div><a class='eyebrow' href='/'>Archer Clock</a><h1>");
+  page += title;
+  page += F("</h1></div><nav><a");
+  if (strcmp(activePath, "/") == 0) {
+    page += F(" class='active'");
+  }
+  page += F(" href='/'>Settings</a><a");
+  if (strcmp(activePath, "/firmware") == 0) {
+    page += F(" class='active'");
+  }
+  page += F(" href='/firmware'>Firmware</a></nav></header>");
 }
 
 String configPage(const String& message = "") {
   String page;
-  page.reserve(2800);
-  page += F("<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1'>");
-  page += F("<title>Archer Clock Setup</title><style>");
-  page += F("body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;margin:0;background:#111;color:#f7f7f7}");
-  page += F("main{max-width:520px;margin:0 auto;padding:28px 20px}label{display:block;margin:18px 0 6px}");
-  page += F("input{box-sizing:border-box;width:100%;padding:12px;border-radius:6px;border:1px solid #555;background:#1d1d1d;color:#fff;font-size:16px}");
-  page += F("input[type=checkbox]{width:auto;margin-right:8px;transform:scale(1.2)}");
-  page += F("select{box-sizing:border-box;width:100%;padding:12px;border-radius:6px;border:1px solid #555;background:#1d1d1d;color:#fff;font-size:16px}");
-  page += F(".color-row{display:grid;grid-template-columns:34px 1fr;gap:10px;align-items:center}.swatch{display:block;width:30px;height:30px;border-radius:6px;border:1px solid #777}");
-  page += F("button,a.button{display:inline-block;margin-top:20px;padding:11px 14px;border:0;border-radius:6px;background:#f4c542;color:#111;font-weight:700;text-decoration:none}");
-  page += F("a.button.secondary{background:#333;color:#fff;margin-left:8px}.note{color:#bbb;line-height:1.45}.msg{padding:10px 12px;background:#173b28;border:1px solid #2c8053;border-radius:6px}");
-  page += F("script{display:none}");
-  page += F("</style></head><body><main><h1>Archer Clock Setup</h1>");
+  page.reserve(7600);
+  page += F("<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>");
+  page += F("<title>Archer Clock</title><style>");
+  appendPageStyles(page);
+  page += F("</style></head><body><main class='page'>");
+  appendPageHeader(page, "Settings", "/");
   if (message.length() > 0) {
     page += F("<p class='msg'>");
     page += htmlEscape(message);
     page += F("</p>");
   }
-  page += F("<p class='note'>Enter the Wi-Fi network the clock should use for NTP time sync");
+  page += F("<p class='status'>Setup AP: ");
+  String apSsid = WiFi.softAPSSID();
+  page += htmlEscape(apSsid.length() > 0 ? apSsid : String("not active"));
+  page += F("<br>Address: ");
+  page += htmlEscape(WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : WiFi.softAPIP().toString());
+  page += F("<br>Device: ");
+  page += htmlEscape(String(OTA_HOSTNAME) + "-" + deviceSuffix());
+  page += F("</p>");
+  String storedSsid;
+  String storedPassword;
+  loadWifiCredentials(storedSsid, storedPassword);
+  page += F("<form method='post' action='/save'><section class='panel'><h2>Wi-Fi</h2>");
+  page += F("<p class='note'>Enter the network the clock should use for NTP time sync");
 #ifdef ENABLE_OTA
   page += F(" and OTA firmware updates");
 #endif
-  page += F(".</p><form method='post' action='/save'>");
-  page += F("<label for='ssid'>Wi-Fi name</label><input id='ssid' name='ssid' autocomplete='off' required>");
-  page += F("<label for='password'>Wi-Fi password</label><input id='password' name='password' type='password' autocomplete='current-password'>");
-  page += F("<button type='submit'>Save and Restart</button>");
-  page += F("<a class='button secondary' href='/clear'>Forget Saved Wi-Fi</a>");
-  page += F("<a class='button secondary' href='/firmware'>Firmware Update</a>");
-  page += F("</form><h2>Night Mode</h2>");
+  page += F(".</p>");
+  page += F("<label for='ssid'>Wi-Fi name</label><input id='ssid' name='ssid' autocomplete='off' value='");
+  page += htmlEscape(storedSsid);
+  page += F("' required>");
+  page += F("<label for='password'>Wi-Fi password</label><input id='password' name='password' type='password' autocomplete='current-password' value='");
+  page += htmlEscape(storedPassword);
+  page += F("'>");
+  page += F("<button class='primary' type='submit'>Save Wi-Fi and restart</button>");
+  page += F("<div class='actions single'><a class='button' href='/clear'>Forget saved Wi-Fi</a></div>");
+  page += F("</section></form>");
   page += F("<form method='post' action='/settings'>");
-  page += F("<label><input name='night_enabled' type='checkbox' value='1'");
-  if (nightModeEnabled) {
+  page += F("<section class='panel'><h2>Scheduled Theme</h2>");
+  page += F("<label class='check'><input name='scheduled_theme_enabled' type='checkbox' value='1'");
+  if (scheduledThemeEnabled) {
     page += F(" checked");
   }
-  page += F("> Enable night mode</label>");
-  page += F("<label for='night_start'>Night mode start hour</label>");
-  page += F("<input id='night_start' name='night_start' type='number' min='0' max='23' value='");
-  page += String(nightModeStartHour);
-  page += F("' required>");
-  page += F("<h2>Markers</h2>");
-  page += F("<label><input name='show_hour_markers' type='checkbox' value='1'");
+  page += F(">Enable scheduled theme</label>");
+  page += F("<label for='scheduled_theme_id'>Scheduled theme</label>");
+  page += F("<select id='scheduled_theme_id' name='scheduled_theme_id'>");
+  appendThemeOptions(page, scheduledThemeId);
+  page += F("</select>");
+  page += F("<div class='inline'><label for='scheduled_start'>Start hour");
+  page += F("<input id='scheduled_start' name='scheduled_start' type='number' min='0' max='23' value='");
+  page += String(scheduledThemeStartHour);
+  page += F("' required></label>");
+  page += F("<label for='scheduled_end'>End hour");
+  page += F("<input id='scheduled_end' name='scheduled_end' type='number' min='0' max='23' value='");
+  page += String(scheduledThemeEndHour);
+  page += F("' required></label></div>");
+  page += F("</section><section class='panel'><h2>Themes</h2>");
+  page += F("<label for='theme_select'>Theme</label>");
+  page += F("<select id='theme_select' name='theme_id'><option value=''>Custom</option>");
+  appendThemeOptions(page, configuredThemeId);
+  page += F("</select>");
+  page += F("<p class='hint'><strong>Preset preview</strong>Selecting a theme updates the brightness, marker, hand, and trail controls below before you save. Brightness is saved separately for each theme, including when it runs on a schedule.</p>");
+  page += F("</section><section class='panel'><h2>Brightness</h2>");
+  page += F("<p class='note'>Values range from 0 (off) to 255 (full brightness). Marker brightness scales the hour, minute, and second markers in addition to global brightness.</p>");
+  page += F("<div class='inline'><label for='global_brightness'>Global LED brightness");
+  page += F("<input id='global_brightness' name='global_brightness' type='number' min='0' max='255' step='1' value='");
+  page += String(configuredGlobalLEDBrightness);
+  page += F("' required></label><label for='marker_brightness'>Marker LED brightness");
+  page += F("<input id='marker_brightness' name='marker_brightness' type='number' min='0' max='255' step='1' value='");
+  page += String(configuredMarkerLEDBrightness);
+  page += F("' required></label></div>");
+  page += F("</section><section class='panel'><h2>Markers</h2>");
+  page += F("<label class='check'><input name='animate_second_hand' type='checkbox' value='1'");
+  if (configuredAnimateSecondHand) {
+    page += F(" checked");
+  }
+  page += F(">Animate second hand</label>");
+  page += F("<label class='check'><input name='show_hour_markers' type='checkbox' value='1'");
   if (configuredShowHoursMarkers) {
     page += F(" checked");
   }
-  page += F("> Show hour markers</label>");
-  page += F("<label><input name='show_minute_markers' type='checkbox' value='1'");
+  page += F(">Show hour markers</label>");
+  page += F("<label class='check'><input name='show_minute_markers' type='checkbox' value='1'");
   if (configuredShowMinutesMarkers) {
     page += F(" checked");
   }
-  page += F("> Show minute markers</label>");
-  page += F("<label><input name='show_second_markers' type='checkbox' value='1'");
+  page += F(">Show minute markers</label>");
+  page += F("<label class='check'><input name='show_second_markers' type='checkbox' value='1'");
   if (configuredShowSecondsMarkers) {
     page += F(" checked");
   }
-  page += F("> Show second markers</label>");
-  page += F("<h2>Colors</h2>");
+  page += F(">Show second markers</label>");
+  page += F("</section><section class='panel'><h2>Colors</h2><div class='color-grid'>");
   appendColorSelect(page, "zero_marker_color", "Zero marker color", configuredZeroMarkerColor);
   appendColorSelect(page, "seconds_markers_color", "Second markers color", configuredSecondsMarkersColor);
   appendColorSelect(page, "minutes_markers_color", "Minute markers color", configuredMinutesMarkersColor);
@@ -386,15 +617,50 @@ String configPage(const String& message = "") {
   appendColorSelect(page, "seconds_hand_color", "Second hand color", configuredSecondsHandColor);
   appendColorSelect(page, "minutes_hand_color", "Minute hand color", configuredMinutesHandColor);
   appendColorSelect(page, "hours_hand_color", "Hour hand color", configuredHoursHandColor);
-  page += F("<button type='submit'>Save Display Settings and Restart</button>");
-  page += F("</form><p class='note'>Setup AP: ");
-  String apSsid = WiFi.softAPSSID();
-  page += htmlEscape(apSsid.length() > 0 ? apSsid : String("not active"));
-  page += F("<br>Address: ");
-  page += htmlEscape(WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : WiFi.softAPIP().toString());
-  page += F("<br>Device: ");
-  page += htmlEscape(String(OTA_HOSTNAME) + "-" + deviceSuffix());
-  page += F("</p><script>");
+  page += F("</div></section><section class='panel'><h2>Time Trail</h2>");
+  page += F("<label class='check'><input name='time_trail_enabled' type='checkbox' value='1'");
+  if (configuredTimeTrailEnabled) {
+    page += F(" checked");
+  }
+  page += F(">Enable Time Trail</label><div class='color-grid'>");
+  appendColorSelect(page, "time_trail_seconds_color", "Second trail color", configuredTimeTrailSecondsColor);
+  appendColorSelect(page, "time_trail_minutes_color", "Minute trail color", configuredTimeTrailMinutesColor);
+  appendColorSelect(page, "time_trail_hours_color", "Hour trail color", configuredTimeTrailHoursColor);
+  page += F("</div></section><button class='primary' type='submit'>Save display settings and restart</button>");
+  page += F("</form><script>");
+  page += F("const themes={");
+  page += F("classicCorpus:{hour:true,minute:true,second:true,animate:true,trail:false,zero:'#FF0000',secMark:'#0000FF',minMark:'#0000FF',hourMark:'#0000FF',secHand:'#FFD700',minHand:'#FFD700',hourHand:'#FFD700',trailSec:'#00FF00',trailMin:'#00FFFF',trailHour:'#8000FF'},");
+  page += F("solarFlare:{hour:true,minute:true,second:true,animate:true,trail:true,zero:'#FF0000',secMark:'#FF8000',minMark:'#FFBF00',hourMark:'#FF8000',secHand:'#FFD700',minHand:'#FFD700',hourHand:'#FFD700',trailSec:'#FFFF00',trailMin:'#FF8000',trailHour:'#FF0000'},");
+  page += F("deepSpace:{hour:true,minute:true,second:true,animate:true,trail:true,zero:'#FFFFFF',secMark:'#0000FF',minMark:'#0000FF',hourMark:'#8000FF',secHand:'#00FFFF',minHand:'#00FFFF',hourHand:'#00FFFF',trailSec:'#0000FF',trailMin:'#8000FF',trailHour:'#00FFFF'},");
+  page += F("aurora:{hour:true,minute:true,second:true,animate:true,trail:true,zero:'#00FF00',secMark:'#00FFFF',minMark:'#00FFFF',hourMark:'#0000FF',secHand:'#FFFFFF',minHand:'#FFFFFF',hourHand:'#FFFFFF',trailSec:'#00FF00',trailMin:'#00FFFF',trailHour:'#0000FF'},");
+  page += F("synthwave:{hour:true,minute:true,second:true,animate:true,trail:true,zero:'#FF00FF',secMark:'#8000FF',minMark:'#8000FF',hourMark:'#FF00FF',secHand:'#00FFFF',minHand:'#00FFFF',hourHand:'#00FFFF',trailSec:'#FF66CC',trailMin:'#FF00FF',trailHour:'#0000FF'},");
+  page += F("ember:{hour:true,minute:true,second:false,animate:true,trail:true,zero:'#FFBF00',secMark:'#FF0000',minMark:'#FF8000',hourMark:'#FF0000',secHand:'#FF8000',minHand:'#FF8000',hourHand:'#FF8000',trailSec:'#FF0000',trailMin:'#FF8000',trailHour:'#FFD700'},");
+  page += F("iceClock:{hour:true,minute:true,second:true,animate:true,trail:true,zero:'#00FFFF',secMark:'#0000FF',minMark:'#0000FF',hourMark:'#00FFFF',secHand:'#FFFFFF',minHand:'#FFFFFF',hourHand:'#FFFFFF',trailSec:'#00FFFF',trailMin:'#0000FF',trailHour:'#FFFFFF'},");
+  page += F("minimal:{hour:true,minute:false,second:false,animate:false,trail:false,zero:'#FF0000',secMark:'#0000FF',minMark:'#0000FF',hourMark:'#FFFFFF',secHand:'#FFFFFF',minHand:'#FFFFFF',hourHand:'#FFFFFF',trailSec:'#00FF00',trailMin:'#00FFFF',trailHour:'#8000FF'},");
+  page += F("trailblazer:{hour:true,minute:true,second:true,animate:true,trail:true,zero:'#FFFFFF',secMark:'#0000FF',minMark:'#0000FF',hourMark:'#0000FF',secHand:'#FFD700',minHand:'#FFD700',hourHand:'#FFD700',trailSec:'#00FF00',trailMin:'#00FFFF',trailHour:'#8000FF'},");
+  page += F("classicNight:{hour:false,minute:false,second:true,animate:false,trail:false,zero:'#FF8000',secMark:'#FF0000',minMark:'#FF0000',hourMark:'#FF0000',secHand:'#0000FF',minHand:'#0000FF',hourHand:'#0000FF',trailSec:'#00FF00',trailMin:'#00FFFF',trailHour:'#8000FF'},");
+  page += F("stealthNight:{hour:false,minute:false,second:true,animate:false,trail:true,zero:'#FF8000',secMark:'#FF0000',minMark:'#0000FF',hourMark:'#8000FF',secHand:'#0000FF',minHand:'#0000FF',hourHand:'#0000FF',trailSec:'#8000FF',trailMin:'#0000FF',trailHour:'#8000FF'}");
+  page += F("};");
+  page += F("const brightness={");
+  for (const ThemePreset& theme : THEME_PRESETS) {
+    page += theme.id;
+    page += F(":{global:");
+    page += String(theme.globalBrightness);
+    page += F(",marker:");
+    page += String(theme.markerBrightness);
+    page += F("},");
+  }
+  page += F("'':{global:");
+  page += String(configuredGlobalLEDBrightness);
+  page += F(",marker:");
+  page += String(configuredMarkerLEDBrightness);
+  page += F("}};");
+  page += F("const fieldMap={zero:'zero_marker_color',secMark:'seconds_markers_color',minMark:'minutes_markers_color',hourMark:'hours_markers_color',secHand:'seconds_hand_color',minHand:'minutes_hand_color',hourHand:'hours_hand_color',trailSec:'time_trail_seconds_color',trailMin:'time_trail_minutes_color',trailHour:'time_trail_hours_color'};");
+  page += F("function setCheck(name,value){const input=document.querySelector(`[name='${name}']`);if(input){input.checked=value;}}");
+  page += F("function setColor(id,value){const select=document.getElementById(id);if(!select)return;select.value=value;select.dispatchEvent(new Event('change'));}");
+  page += F("document.getElementById('theme_select').addEventListener('change',event=>{const levels=brightness[event.target.value];document.getElementById('global_brightness').value=levels.global;document.getElementById('marker_brightness').value=levels.marker;const theme=themes[event.target.value];if(!theme)return;");
+  page += F("setCheck('show_hour_markers',theme.hour);setCheck('show_minute_markers',theme.minute);setCheck('show_second_markers',theme.second);setCheck('animate_second_hand',theme.animate);setCheck('time_trail_enabled',theme.trail);");
+  page += F("Object.keys(fieldMap).forEach(key=>setColor(fieldMap[key],theme[key]));});");
   page += F("document.querySelectorAll('.color-row').forEach(row=>{const swatch=row.querySelector('.swatch');const select=row.querySelector('select');select.addEventListener('change',()=>{swatch.style.background=select.value;});});");
   page += F("</script></main></body></html>");
   return page;
@@ -402,35 +668,36 @@ String configPage(const String& message = "") {
 
 String firmwarePage(const String& message = "") {
   String page;
-  page.reserve(2400);
-  page += F("<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1'>");
+  page.reserve(5000);
+  page += F("<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>");
   page += F("<title>Archer Clock Firmware</title><style>");
-  page += F("body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;margin:0;background:#111;color:#f7f7f7}");
-  page += F("main{max-width:520px;margin:0 auto;padding:28px 20px}label{display:block;margin:18px 0 6px}");
-  page += F("input{box-sizing:border-box;width:100%;padding:12px;border-radius:6px;border:1px solid #555;background:#1d1d1d;color:#fff;font-size:16px}");
-  page += F("button,a.button{display:inline-block;margin-top:20px;padding:11px 14px;border:0;border-radius:6px;background:#f4c542;color:#111;font-weight:700;text-decoration:none}");
-  page += F("a.button.secondary{background:#333;color:#fff;margin-left:8px}.note{color:#bbb;line-height:1.45}.msg{padding:10px 12px;background:#173b28;border:1px solid #2c8053;border-radius:6px}");
-  page += F("progress{width:100%;height:18px;margin-top:18px}.progress-text{margin-top:8px;color:#f4c542;font-weight:700}");
-  page += F("</style></head><body><main><h1>Firmware Update</h1>");
+  appendPageStyles(page);
+  page += F("</style></head><body><main class='page'>");
+  appendPageHeader(page, "Firmware", "/firmware");
   if (message.length() > 0) {
     page += F("<p class='msg'>");
     page += htmlEscape(message);
     page += F("</p>");
   }
-  page += F("<p class='note'>Choose a PlatformIO firmware binary, usually <code>.pio/build/wemos_d1_mini32/firmware.bin</code>. The clock will restart after a successful upload.</p>");
-  page += F("<form id='firmware-form' method='post' action='/update' enctype='multipart/form-data'>");
-  page += F("<label for='firmware'>Firmware file</label><input id='firmware' name='firmware' type='file' accept='.bin,application/octet-stream' required>");
-  page += F("<button type='submit'>Upload Firmware</button>");
-  page += F("<a class='button secondary' href='/'>Back</a>");
-  page += F("<progress id='upload-progress' value='0' max='100' hidden></progress>");
-  page += F("<div id='upload-percent' class='progress-text' hidden>0%</div>");
+  page += F("<p class='status'>Upload a PlatformIO firmware binary. The clock will restart after a successful update.</p>");
+  page += F("<form id='firmware-form' method='post' action='/update' enctype='multipart/form-data'><section class='panel'><h2>Firmware Update</h2>");
+  page += F("<p class='hint'><strong>Expected file</strong><code>.pio/build/wemos_d1_mini32/firmware.bin</code></p>");
+  page += F("<label class='uploadBox' for='firmware'><span>Select firmware binary</span><small>.bin or application/octet-stream</small><div id='firmware-file-status' class='fileStatus'>No file selected</div><input id='firmware' name='firmware' type='file' accept='.bin,application/octet-stream' required></label>");
+  page += F("<progress id='upload-progress' value='0' max='100'></progress>");
+  page += F("<div id='upload-percent' class='progress-text'>0%</div>");
+  page += F("</section><button id='upload-button' class='primary' type='submit' disabled>Upload firmware</button>");
   page += F("</form><script>");
   page += F("const form=document.getElementById('firmware-form');");
+  page += F("const firmware=document.getElementById('firmware');");
+  page += F("const uploadButton=document.getElementById('upload-button');");
+  page += F("const fileStatus=document.getElementById('firmware-file-status');");
   page += F("const bar=document.getElementById('upload-progress');");
   page += F("const label=document.getElementById('upload-percent');");
-  page += F("form.addEventListener('submit',event=>{event.preventDefault();");
+  page += F("function validFirmwareFile(){const file=firmware.files[0];if(!file)return false;const name=file.name.toLowerCase();return name.endsWith('.bin')||file.type==='application/octet-stream';}");
+  page += F("firmware.addEventListener('change',()=>{const file=firmware.files[0];const valid=validFirmwareFile();uploadButton.disabled=!valid;fileStatus.className='fileStatus';if(!file){fileStatus.textContent='No file selected';return;}if(valid){fileStatus.textContent=file.name;fileStatus.classList.add('ready');}else{fileStatus.textContent='Invalid file: '+file.name;fileStatus.classList.add('invalid');}});");
+  page += F("form.addEventListener('submit',event=>{event.preventDefault();if(!validFirmwareFile()){uploadButton.disabled=true;return;}");
   page += F("const data=new FormData(form);const request=new XMLHttpRequest();");
-  page += F("bar.hidden=false;label.hidden=false;bar.value=0;label.textContent='0%';");
+  page += F("bar.value=0;label.textContent='0%';");
   page += F("request.upload.onprogress=event=>{if(event.lengthComputable){const percent=Math.round((event.loaded/event.total)*100);bar.value=percent;label.textContent=percent+'%';}};");
   page += F("request.onload=()=>{document.open();document.write(request.responseText);document.close();};");
   page += F("request.onerror=()=>{label.textContent='Upload failed';};");
@@ -464,9 +731,41 @@ void handleConfigSave() {
 }
 
 void handleSettingsSave() {
-  int requestedStartHour = configServer.arg("night_start").toInt();
-  if (requestedStartHour < 0 || requestedStartHour > 23) {
-    configServer.send(400, "text/html", configPage("Night mode start hour must be between 0 and 23."));
+  String requestedThemeId = configServer.arg("theme_id");
+  if (requestedThemeId.length() > 0 && findThemePreset(requestedThemeId) == nullptr) {
+    configServer.send(400, "text/html", configPage("Theme was invalid."));
+    return;
+  }
+  // Reject missing, fractional, signed, or out-of-range values before saving.
+  auto parseBrightness = [](const String& value, uint8_t& result) {
+    if (value.length() == 0 || value.length() > 3) return false;
+    unsigned int parsed = 0;
+    for (unsigned int i = 0; i < value.length(); ++i) {
+      if (value[i] < '0' || value[i] > '9') return false;
+      parsed = parsed * 10 + (value[i] - '0');
+    }
+    if (parsed > 255) return false;
+    result = static_cast<uint8_t>(parsed);
+    return true;
+  };
+  uint8_t newGlobalBrightness;
+  uint8_t newMarkerBrightness;
+  if (!parseBrightness(configServer.arg("global_brightness"), newGlobalBrightness) ||
+      !parseBrightness(configServer.arg("marker_brightness"), newMarkerBrightness)) {
+    configServer.send(400, "text/html", configPage("Brightness values must be whole numbers between 0 and 255."));
+    return;
+  }
+  int requestedStartHour = configServer.arg("scheduled_start").toInt();
+  int requestedEndHour = configServer.arg("scheduled_end").toInt();
+  String requestedScheduledThemeId = configServer.arg("scheduled_theme_id");
+
+  if (requestedStartHour < 0 || requestedStartHour > 23 || requestedEndHour < 0 || requestedEndHour > 23) {
+    configServer.send(400, "text/html", configPage("Scheduled theme hours must be between 0 and 23."));
+    return;
+  }
+
+  if (findThemePreset(requestedScheduledThemeId) == nullptr) {
+    configServer.send(400, "text/html", configPage("Scheduled theme was invalid."));
     return;
   }
 
@@ -477,6 +776,9 @@ void handleSettingsSave() {
   CRGB newSecondsHandColor;
   CRGB newMinutesHandColor;
   CRGB newHoursHandColor;
+  CRGB newTimeTrailSecondsColor;
+  CRGB newTimeTrailMinutesColor;
+  CRGB newTimeTrailHoursColor;
 
   if (!parseHexColor(configServer.arg("zero_marker_color"), newZeroMarkerColor) ||
       !parseHexColor(configServer.arg("seconds_markers_color"), newSecondsMarkersColor) ||
@@ -484,14 +786,23 @@ void handleSettingsSave() {
       !parseHexColor(configServer.arg("hours_markers_color"), newHoursMarkersColor) ||
       !parseHexColor(configServer.arg("seconds_hand_color"), newSecondsHandColor) ||
       !parseHexColor(configServer.arg("minutes_hand_color"), newMinutesHandColor) ||
-      !parseHexColor(configServer.arg("hours_hand_color"), newHoursHandColor)) {
+      !parseHexColor(configServer.arg("hours_hand_color"), newHoursHandColor) ||
+      !parseHexColor(configServer.arg("time_trail_seconds_color"), newTimeTrailSecondsColor) ||
+      !parseHexColor(configServer.arg("time_trail_minutes_color"), newTimeTrailMinutesColor) ||
+      !parseHexColor(configServer.arg("time_trail_hours_color"), newTimeTrailHoursColor)) {
     configServer.send(400, "text/html", configPage("One or more color values were invalid."));
     return;
   }
 
   saveDisplaySettings(
-    configServer.hasArg("night_enabled"),
+    requestedThemeId,
+    newGlobalBrightness,
+    newMarkerBrightness,
+    configServer.hasArg("scheduled_theme_enabled"),
     static_cast<uint8_t>(requestedStartHour),
+    static_cast<uint8_t>(requestedEndHour),
+    requestedScheduledThemeId,
+    configServer.hasArg("animate_second_hand"),
     configServer.hasArg("show_second_markers"),
     configServer.hasArg("show_minute_markers"),
     configServer.hasArg("show_hour_markers"),
@@ -501,7 +812,11 @@ void handleSettingsSave() {
     newHoursMarkersColor,
     newSecondsHandColor,
     newMinutesHandColor,
-    newHoursHandColor
+    newHoursHandColor,
+    configServer.hasArg("time_trail_enabled"),
+    newTimeTrailSecondsColor,
+    newTimeTrailMinutesColor,
+    newTimeTrailHoursColor
   );
 
   configServer.send(200, "text/html", configPage("Display settings saved. The clock is restarting now."));
@@ -687,65 +1002,30 @@ void startOta() {
 }
 #endif
 
-bool inNightMode() {
-  #ifdef ENABLE_NIGHT_MODE
-    if (!nightModeEnabled) {
-      if (currentMode != MODE_DAY) {
-        currentMode = MODE_DAY;
-        switchModes = true;
-      }
-      return false;
-    }
-
-    #ifdef DEBUG_NIGHT_MODE
-    Serial.println("Debugging Night Mode");
-    int currentHour = hours;
-    if (nightModeStartHour <= hours || hours < 7) 
-    {
-      if (currentMode != MODE_NIGHT) 
-      {
-        currentMode = MODE_NIGHT;
-        switchModes = true;
-      }
-      return true;
-    } 
-    else 
-    {
-      if (currentMode != MODE_DAY) 
-      {
-        currentMode = MODE_DAY;
-        switchModes = true;
-      }
-      return false;
-    }
-    #else
-    struct tm timeinfo;
-    if (!getLocalTime(&timeinfo)) return false;
-    int currentHour = timeinfo.tm_hour;
-    if (nightModeStartHour <= timeinfo.tm_hour || timeinfo.tm_hour < 7) 
-    {
-      if (currentMode != MODE_NIGHT) 
-      {
-        currentMode = MODE_NIGHT;
-        switchModes = true;
-      }
-      return true;
-    } 
-    else
-    {
-      if (currentMode != MODE_DAY) 
-      {
-        currentMode = MODE_DAY;
-        switchModes = true;
-      }
-      return false;
-    }
-    #endif
-  #else
+bool hourInWindow(uint8_t currentHour, uint8_t startHour, uint8_t endHour) {
+  if (startHour == endHour) {
     return false;
-  #endif
+  }
+
+  if (startHour < endHour) {
+    return currentHour >= startHour && currentHour < endHour;
+  }
+
+  return currentHour >= startHour || currentHour < endHour;
 }
 
+bool scheduledThemeIsActive() {
+  if (!scheduledThemeEnabled) {
+    return false;
+  }
+
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo)) {
+    return hourInWindow(hours, scheduledThemeStartHour, scheduledThemeEndHour);
+  }
+
+  return hourInWindow(timeinfo.tm_hour, scheduledThemeStartHour, scheduledThemeEndHour);
+}
 
 void draw(CRGB leds[], uint8_t s, uint8_t m, uint8_t h) {
   // Scale factor for markers (0..255). 32 is dim; max is 255 (not 256).
@@ -755,6 +1035,12 @@ void draw(CRGB leds[], uint8_t s, uint8_t m, uint8_t h) {
   if (switchModes) {
     fill_solid(leds, NUM_LEDS, CRGB::Black);
     switchModes = false;
+  }
+
+  if (timeTrailEnabled) {
+    fill_solid(leds, 60, CRGB::Black);
+    fill_solid(&leds[60], 60, CRGB::Black);
+    fill_solid(&leds[120], 12, CRGB::Black);
   }
 
   // Leave the zero marker at default brightness
@@ -782,6 +1068,20 @@ void draw(CRGB leds[], uint8_t s, uint8_t m, uint8_t h) {
     for (int c = 0; c < 12; ++c) {
       rgbValue = hoursMarkersColor;
       leds[120 + c] = rgbValue.scale8(MARKER_SCALE);
+    }
+  }
+
+  if (timeTrailEnabled) {
+    for (int c = 0; c < trailSeconds; ++c) {
+      leds[c] = timeTrailSecondsColor;
+    }
+
+    for (int c = 0; c < trailMinutes; ++c) {
+      leds[60 + c] = timeTrailMinutesColor;
+    }
+
+    for (int c = 0; c <= trailHours && c < 12; ++c) {
+      leds[120 + c] = timeTrailHoursColor;
     }
   }
 
@@ -817,6 +1117,9 @@ void syncronize() {
   hours = timeinfo.tm_hour % 12;
   minutes = timeinfo.tm_min;
   seconds = timeinfo.tm_sec;
+  trailHours = hours;
+  trailMinutes = minutes;
+  trailSeconds = seconds;
   syncCountdown = SYNC_TIME;
 
   #ifdef DEBUG_NIGHT_MODE
@@ -841,7 +1144,7 @@ void setup() {
   loadDisplaySettings();
 
   // set global brightness (0..255)
-  FastLED.setBrightness(GLOBAL_LED_BRIGHTNESS); // <-- adjust as needed
+  FastLED.setBrightness(configuredGlobalLEDBrightness);
 
   // optional: limit total current to ~500mA at 5V
   FastLED.setMaxPowerInVoltsAndMilliamps(5, 500);
@@ -857,37 +1160,12 @@ void setup() {
 
 void loop() {
 
-  bool isNightMode = inNightMode();
-  if (isNightMode) {
   // Brightness
-  globalLEDBrightness = NIGHT_GLOBAL_LED_BRIGHTNESS;
-  markerLEDBrightness = NIGHT_MARKER_LED_BRIGHTNESS;
+  globalLEDBrightness = configuredGlobalLEDBrightness;
+  markerLEDBrightness = configuredMarkerLEDBrightness;
 
   // Animation
-  animateSecondHand = NIGHT_ANIMATE_SECOND_HAND;
-
-  // Unremark for show
-  showSecondsMarkers = NIGHT_SHOW_SECONDS_MARCKERS;
-  showMinutesMarkers = NIGHT_SHOW_MINUTES_MARCKERS;
-  showHoursMarkers = NIGHT_SHOW_HOURS_MARCKERS;
-
-  // Marckers color
-  zeroMarkerColor = NIGHT_ZERO_MARKER_COLOR;
-  secondsMarkersColor = NIGHT_SECONDS_MARCKERS_COLOR;
-  minutesMarkersColor = NIGHT_MINUTES_MARCKERS_COLOR;
-  hoursMarkersColor = NIGHT_HOURS_MARCKERS_COLOR;
-
-  // Hands color
-  secondsHandColor = NIGHT_SECONDS_HAND_COLOR;
-  minutesHandColor = NIGHT_MINUTES_HAND_COLOR;
-  hoursHandColor = NIGHT_HOURS_HAND_COLOR;
-  } else {
-  // Brightness
-  globalLEDBrightness = GLOBAL_LED_BRIGHTNESS;
-  markerLEDBrightness = MARKER_LED_BRIGHTNESS;
-
-  // Animation
-  animateSecondHand = ANIMATE_SECOND_HAND;
+  animateSecondHand = configuredAnimateSecondHand;
 
   // Unremark for show
   showSecondsMarkers = configuredShowSecondsMarkers;
@@ -904,7 +1182,26 @@ void loop() {
   secondsHandColor = configuredSecondsHandColor;
   minutesHandColor = configuredMinutesHandColor;
   hoursHandColor = configuredHoursHandColor;
-  }  
+
+  timeTrailEnabled = configuredTimeTrailEnabled;
+  timeTrailSecondsColor = configuredTimeTrailSecondsColor;
+  timeTrailMinutesColor = configuredTimeTrailMinutesColor;
+  timeTrailHoursColor = configuredTimeTrailHoursColor;
+
+  bool useScheduledTheme = scheduledThemeIsActive();
+  display_mode nextMode = useScheduledTheme ? MODE_SCHEDULED : MODE_DAY;
+  if (currentMode != nextMode) {
+    currentMode = nextMode;
+    switchModes = true;
+  }
+
+  if (useScheduledTheme) {
+    const ThemePreset* scheduledTheme = findThemePreset(scheduledThemeId);
+    if (scheduledTheme != nullptr) {
+      applyThemePreset(*scheduledTheme);
+      timeTrailEnabled = configuredTimeTrailEnabled;
+    }
+  }
 
   FastLED.setBrightness(globalLEDBrightness);
 
@@ -932,6 +1229,11 @@ void loop() {
 
   // keep the current seconds LED static during the sweep
   uint8_t oldSeconds = seconds;
+  if (timeTrailEnabled) {
+    trailSeconds = seconds;
+    trailMinutes = minutes;
+    trailHours = hours;
+  }
 
   for (int i = 0; i<=60; i++) {
 
@@ -970,13 +1272,24 @@ void loop() {
     if (acceleration > 3) acceleration--;
 
     if (animateSecondHand) {
-      leds[seconds] = CRGB::Black;
+      if (!timeTrailEnabled) {
+        leds[seconds] = CRGB::Black;
+      }
     }
 
     // do not clear the seconds LED while sweeping - keep it static
     // only clear the moving minute/hour pixels so the sweep is visible
-    leds[60+minutes] = CRGB::Black;
-    leds[120+hours] = CRGB::Black;
+    if (!timeTrailEnabled) {
+      leds[60+minutes] = CRGB::Black;
+      leds[120+hours] = CRGB::Black;
+    }
+  }
+
+  if (timeTrailEnabled && animateSecondHand) {
+    trailSeconds = seconds;
+    trailMinutes = minutes;
+    trailHours = hours;
+    draw(leds, seconds, minutes, hours);
   }
 
   if (!animateSecondHand) {
@@ -985,6 +1298,12 @@ void loop() {
   leds[oldSeconds] = CRGB::Black; // clear old second LED
   seconds++;
   if (seconds>59) seconds = 0;
+
+  if (timeTrailEnabled) {
+    trailSeconds = seconds;
+    trailMinutes = minutes;
+    trailHours = hours;
+  }
 
   // update display to show the new second tick
   draw(leds, seconds, minutes, hours);

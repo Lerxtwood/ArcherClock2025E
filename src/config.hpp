@@ -1,4 +1,4 @@
-#define FIRM_VERSION 0.8
+#define FIRM_VERSION 0.9
 
 // Wi-Fi credentials are configured at runtime from the clock's setup page
 // and stored in ESP32 non-volatile storage.
@@ -15,33 +15,11 @@
 #define LED_PIN   16
 #define NUM_LEDS  132
 
-#define ENABLE_NIGHT_MODE
-#define NIGHT_MODE_START_HOUR  23   
-
-
-// NIGHT MODE SETTINGS
-// Brightness
-#define NIGHT_GLOBAL_LED_BRIGHTNESS  64
-#define NIGHT_MARKER_LED_BRIGHTNESS  64
-
-// Animation
-#define NIGHT_ANIMATE_SECOND_HAND   0
-
-// Unremark for show
-#define NIGHT_SHOW_SECONDS_MARCKERS 1
-#define NIGHT_SHOW_MINUTES_MARCKERS 0
-#define NIGHT_SHOW_HOURS_MARCKERS   0
-
-// Marckers color
-#define NIGHT_ZERO_MARKER_COLOR CRGB::Orange
-#define NIGHT_SECONDS_MARCKERS_COLOR CRGB::Red
-#define NIGHT_MINUTES_MARCKERS_COLOR CRGB::Red
-#define NIGHT_HOURS_MARCKERS_COLOR CRGB::Red
-
-// Hands color
-#define NIGHT_SECONDS_HAND_COLOR CRGB::Blue
-#define NIGHT_MINUTES_HAND_COLOR CRGB::Blue
-#define NIGHT_HOURS_HAND_COLOR CRGB::Blue
+// SCHEDULED THEME SETTINGS
+#define SCHEDULED_THEME_ENABLED 1
+#define SCHEDULED_THEME_ID "classicNight"
+#define SCHEDULED_THEME_START_HOUR 23
+#define SCHEDULED_THEME_END_HOUR 7
 
 
 
@@ -68,6 +46,12 @@
 #define SECONDS_HAND_COLOR CRGB::Gold
 #define MINUTES_HAND_COLOR CRGB::Gold
 #define HOURS_HAND_COLOR CRGB::Gold
+
+// TIME TRAIL SETTINGS
+#define TIME_TRAIL_ENABLED 0
+#define TIME_TRAIL_SECONDS_COLOR CRGB::Green
+#define TIME_TRAIL_MINUTES_COLOR CRGB::Cyan
+#define TIME_TRAIL_HOURS_COLOR CRGB::Purple
 
 // Time zone and NTP server
 const char* ntpServer = "pool.ntp.org";

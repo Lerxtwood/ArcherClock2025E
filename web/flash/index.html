@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Install Archer Clock 2025E firmware from GitHub Releases directly over USB.">
+  <title>Archer Clock · Firmware Installer</title>
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="https://unpkg.com/esp-web-tools@10.1.0/dist/web/install-button.js?module"></script>
+  <script src="installer.js" defer></script>
+</head>
+<body>
+  <main class="page">
+    <header><a class="brand" href="./">ARCHER CLOCK</a><a id="releases-link" hidden>GitHub Releases ↗</a></header>
+    <div class="hero">
+      <section class="intro">
+        <p class="eyebrow">2025E / ESP32</p>
+        <h1>A fresh start.<br>Right on time.</h1>
+        <p class="lead">Install your clock’s firmware straight from your browser. One USB cable, no build tools required.</p>
+        <div class="clock" aria-hidden="true"><i class="hand hour"></i><i class="hand minute"></i><i class="hand second"></i><span></span></div>
+      </section>
+      <section class="panel" aria-labelledby="install-title">
+        <p class="eyebrow">USB INSTALLER</p>
+        <h2 id="install-title">Set your clock in motion.</h2>
+        <p>Connect your WEMOS D1 Mini ESP32 with a USB data cable, then choose a release.</p>
+        <label for="firmware-version">Firmware version</label>
+        <select id="firmware-version" disabled><option>Loading releases…</option></select>
+        <p id="release-status" role="status" aria-live="polite">Looking for installable releases.</p>
+        <p id="beta-note" class="notice" hidden>This is a prerelease intended for testing.</p>
+        <esp-web-install-button id="installer" hidden>
+          <button id="install-button" slot="activate" type="button" disabled>Connect &amp; install</button>
+          <p slot="unsupported" class="notice">USB installation requires a browser with Web Serial support, such as desktop Chrome or Edge.</p>
+          <p slot="not-allowed" class="notice">Open this installer over HTTPS or localhost to connect by USB.</p>
+        </esp-web-install-button>
+        <p id="tools-status" role="status" hidden></p>
+        <div class="downloads"><a id="notes-link" hidden>Release notes ↗</a><a id="factory-link" hidden download>Factory image ↓</a><a id="ota-link" hidden>OTA image ↓</a></div>
+        <button id="retry-button" class="secondary" type="button" hidden>Try again</button>
+        <p class="fine">The installer lets you choose whether to erase saved settings. Erasing removes Wi-Fi credentials and theme settings.</p>
+      </section>
+    </div>
+    <section class="steps" aria-label="Installation steps">
+      <article><span>01 / CONNECT</span><h2>Plug in over USB.</h2><p>Use a data cable and close serial monitors. If connection stalls, hold BOOT while connecting, then release it.</p></article>
+      <article><span>02 / INSTALL</span><h2>Choose your release.</h2><p>Select a version, click Connect &amp; install, and choose the clock’s serial port. Keep it plugged in until installation completes.</p></article>
+      <article><span>03 / CONFIGURE</span><h2>Make it yours.</h2><p>After a fresh install, join <strong>ArcherClock-XXXXXX</strong> Wi-Fi and open <a href="http://192.168.4.1/">192.168.4.1</a>. Save your network, then tune your themes at <a href="http://archer-clock.local/">archer-clock.local</a>.</p></article>
+    </section>
+    <footer>Archer Clock 2025E <span>Firmware from GitHub Releases · Powered by <a href="https://esphome.github.io/esp-web-tools/">ESP Web Tools</a></span></footer>
+    <noscript><p class="notice">Enable JavaScript to select a release and install firmware.</p></noscript>
+  </main>
+</body>
+</html>
