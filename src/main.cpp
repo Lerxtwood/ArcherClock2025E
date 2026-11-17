@@ -1261,11 +1261,7 @@ void loop() {
     }
     if (hours>11) hours -= 12;
 
-    unsigned long start_timer = millis();
     draw(leds, seconds, minutes, hours);
-    unsigned long stop_timer = millis();
-    unsigned long total_time = stop_timer - start_timer;
-    Serial.println(total_time);
 
     delay(acceleration);
     serviceNetwork();

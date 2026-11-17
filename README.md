@@ -31,6 +31,8 @@ The installer in `web/flash/` uses ESP Web Tools to install firmware over USB on
 
 The installer workflow copies full-install images from GitHub Releases into the Pages site. Manifests and firmware are served from the same origin, so browser flashing does not depend on cross-origin GitHub asset downloads. Older releases without `archer-clock-factory.bin` are excluded. Repository links and release discovery use the repository running the workflow, so forks need no hardcoded owner changes.
 
+For browser installs, the workflow splits each factory image into bootloader, partition table, OTA initialization, and application files. The manifest writes only those sections and leaves the ESP32 NVS settings partition (`0x9000`–`0xDFFF`) untouched. Keep **Erase device** unchecked to retain Wi-Fi credentials, theme brightness, and all saved display and schedule settings. Selecting **Erase device** clears them. The workflow validates the partition layout and refuses images whose layout would make preservation unsafe.
+
 ### Enable hosting and publish firmware
 
 1. Push the installer files and workflows to the repository's default branch.
@@ -44,7 +46,7 @@ Release assets:
 
 | File | Purpose |
 | --- | --- |
-| `archer-clock-factory.bin` | Full USB install at offset `0x0`, including bootloader, partition table, OTA initialization, and application. |
+| `archer-clock-factory.bin` | Full image for manual flashing at offset `0x0`. Writing it directly also overwrites settings; use the browser installer to preserve them. |
 | `archer-clock-ota.bin` | Application-only image for the clock's existing Firmware page. |
 | `SHA256SUMS` | SHA-256 checksums of both images. |
 
@@ -52,7 +54,7 @@ During USB installation, choose whether to erase saved settings. Erasing removes
 
 ### Local checks
 
-Run `python -m unittest discover -s tools/tests -v` to test release filtering, image validation, flash manifests, and safe version paths.
+Run `python -m unittest discover -s tools/tests -v` to test release filtering, image validation, flash manifests, safe version paths, and settings preservation with and without device erasure.
 
 To prepare a real installer locally, copy `web/flash/` into a temporary site directory, then run `python tools/build_installer.py --site <site-directory> --repository <owner>/<repository>`. Set `GITHUB_TOKEN` in the environment if needed for API limits. Serve that directory with `python -m http.server 8000 --directory <site-directory>` and open `http://localhost:8000/`.
 

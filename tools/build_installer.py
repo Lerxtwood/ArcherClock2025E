@@ -6,11 +6,52 @@ import json
 import os
 from pathlib import Path
 import shutil
+import struct
 import urllib.parse
 import urllib.request
 
 FACTORY_IMAGE = "archer-clock-factory.bin"
 OTA_IMAGE = "archer-clock-ota.bin"
+NVS_START = 0x9000
+NVS_END = 0xE000
+# Keep every write sector-aligned and leave the Preferences partition untouched.
+FLASH_PARTS = (
+    ("bootloader.bin", 0x1000, 0x8000),
+    ("partitions.bin", 0x8000, NVS_START),
+    ("boot_app0.bin", NVS_END, 0x10000),
+    ("firmware.bin", 0x10000, None),
+)
+
+
+def split_factory_image(image, directory):
+    """Extract flash parts without the merged image's destructive NVS padding.
+
+    These offsets match this project's default ESP32 partition layout. Refuse a
+    changed layout rather than silently overwriting or relocating saved settings.
+    """
+    data = image.read_bytes()
+    if len(data) <= 0x10000 or data[0x1000] != 0xE9 or data[0x10000] != 0xE9:
+        raise ValueError("Invalid ESP32 factory image")
+    partitions = []
+    for address in range(0x8000, 0x8C00, 32):
+        magic, kind, subtype, offset, size, label, flags = struct.unpack_from("<HBBII16sI", data, address)
+        if magic in (0xFFFF, 0xEBEB):  # End marker or partition-table MD5 record.
+            break
+        if magic != 0x50AA:
+            raise ValueError("Invalid ESP32 partition table")
+        partitions.append((kind, subtype, offset, size, label.rstrip(b"\0")))
+    nvs = [entry for entry in partitions if entry[:2] == (1, 2)]
+    ota = [entry for entry in partitions if entry[:2] == (1, 0)]
+    app = [entry for entry in partitions if entry[:2] == (0, 0x10)]
+    if (len(nvs) != 1 or nvs[0][2:] != (NVS_START, NVS_END - NVS_START, b"nvs") or
+            len(ota) != 1 or ota[0][2:4] != (NVS_END, 0x2000) or
+            len(app) != 1 or app[0][2] != 0x10000 or len(data) > app[0][2] + app[0][3]):
+        raise ValueError("Unsupported partition layout; cannot guarantee settings preservation")
+    parts = []
+    for filename, start, end in FLASH_PARTS:
+        (directory / filename).write_bytes(data[start:end])
+        parts.append({"path": filename, "offset": start})
+    return parts
 
 
 def request_json(url):
@@ -46,13 +87,14 @@ def build_site(site, repository, limit=12):
         download(asset["browser_download_url"], image)
         if image.stat().st_size != asset["size"] or image.stat().st_size == 0:
             raise ValueError(f"Incomplete factory image for {tag}")
+        parts = split_factory_image(image, version_dir)
         manifest = {
             "name": "Archer Clock 2025E",
             "version": tag.removeprefix("v"),
             "new_install_prompt_erase": True,
             "new_install_improv_wait_time": 0,
             "builds": [{"chipFamily": "ESP32", "improv": False,
-                        "parts": [{"path": FACTORY_IMAGE, "offset": 0}]}],
+                        "parts": parts}],
         }
         (version_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
         # Encode '%' again for URL paths so encoded tag characters remain literal filenames.
