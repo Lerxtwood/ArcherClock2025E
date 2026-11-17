@@ -25,6 +25,8 @@ The Settings page includes a Brightness section below Themes. Global LED brightn
 
 ## Browser Firmware Installer
 
+At startup, the clock displays its installed version for five seconds before Wi-Fi synchronization: blue hour markers show the major version, amber minute markers show the minor version, and green second markers show the patch version. An unlit ring means zero. For v0.9.2, the hour ring is dark, nine minute markers are amber, and two second markers are green. Each ring can display up to twelve markers. The display uses a fixed brightness of 128, then restores the saved brightness.
+
 [Open the hosted firmware installer](https://lerxtwood.github.io/ArcherClock2025E/) · [GitHub Releases](https://github.com/Lerxtwood/ArcherClock2025E/releases)
 
 The installer in `web/flash/` uses ESP Web Tools to install firmware over USB on the WEMOS D1 Mini ESP32. It lists up to 12 compatible GitHub Releases, defaults to the newest stable version, and labels prereleases. Install with a USB data cable using desktop Chrome or Edge over HTTPS (or localhost).

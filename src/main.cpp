@@ -178,6 +178,31 @@ void setStatusLed(CRGB color) {
   FastLED.show();
 }
 
+void showStartupVersion() {
+  unsigned int major = 0;
+  unsigned int minor = 0;
+  unsigned int patch = 0;
+  if (sscanf(FIRM_VERSION, "%u.%u.%u", &major, &minor, &patch) != 3) {
+    return;
+  }
+
+  uint8_t previousBrightness = FastLED.getBrightness();
+  // Keep the version visible even when the saved theme turns the clock off.
+  FastLED.setBrightness(128);
+  fill_solid(leds, NUM_LEDS, CRGB::Black);
+  // Each ring has twelve marker positions; zero leaves its ring dark.
+  for (unsigned int marker = 0; marker < 12; ++marker) {
+    if (marker < major) leds[120 + marker] = CRGB::Blue;
+    if (marker < minor) leds[60 + marker * 5] = CRGB(255, 191, 0);
+    if (marker < patch) leds[marker * 5] = CRGB::Green;
+  }
+  FastLED.show();
+  delay(5000);
+  fill_solid(leds, NUM_LEDS, CRGB::Black);
+  FastLED.show();
+  FastLED.setBrightness(previousBrightness);
+}
+
 String htmlEscape(const String& value) {
   String escaped = value;
   escaped.replace("&", "&amp;");
@@ -1149,8 +1174,7 @@ void setup() {
   // optional: limit total current to ~500mA at 5V
   FastLED.setMaxPowerInVoltsAndMilliamps(5, 500);
 
-  fill_solid(leds, NUM_LEDS, CRGB::Black);
-  FastLED.show();
+  showStartupVersion();
 
   syncronize();
 

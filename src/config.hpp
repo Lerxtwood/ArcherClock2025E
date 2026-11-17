@@ -1,4 +1,4 @@
-#define FIRM_VERSION "0.9.1"
+#define FIRM_VERSION "0.9.2"
 
 // Wi-Fi credentials are configured at runtime from the clock's setup page
 // and stored in ESP32 non-volatile storage.
