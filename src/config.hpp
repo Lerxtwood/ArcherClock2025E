@@ -1,4 +1,4 @@
-#define FIRM_VERSION "0.9.2"
+#define FIRM_VERSION "0.9.3"
 
 // Wi-Fi credentials are configured at runtime from the clock's setup page
 // and stored in ESP32 non-volatile storage.
@@ -55,8 +55,7 @@
 
 // Time zone and NTP server
 const char* ntpServer = "pool.ntp.org";
-const long gmtOffset_sec = -25200; // Time offset in seconds (GMT+1)
-const int daylightOffset_sec = 3600; // Daylight Saving Time (in seconds, optional)
+constexpr char DEFAULT_TIME_ZONE[] = "America/Denver";
 
 // Synchronization time in hours
 #define SYNC_TIME 24

@@ -27,6 +27,7 @@
 #include <Update.h>
 #include <WebServer.h>
 #include <WiFi.h>
+#include "time_zones.hpp"
 
 
 typedef enum {
@@ -45,7 +46,12 @@ uint8_t hours = 0;
 uint8_t trailSeconds = 0;
 uint8_t trailMinutes = 0;
 uint8_t trailHours = 0;
-uint8_t syncCountdown = SYNC_TIME;
+unsigned long lastSyncAttempt = 0;
+const TimeZone* configuredTimeZone = findTimeZone(DEFAULT_TIME_ZONE);
+DaylightSaving configuredDaylightSaving = DaylightSaving::Automatic;
+bool timeZoneSaved = false;
+bool handsHaveLocalTime = false;
+int16_t handsOffsetMinutes = 0;
 bool switchModes = false;
 display_mode currentMode = MODE_DAY;
 bool configPortalActive = false;
@@ -372,6 +378,26 @@ void clearWifiCredentials() {
   preferences.end();
 }
 
+void loadTimeSettings() {
+  if (!preferences.begin("clock", true)) {
+    return;
+  }
+  String settings = preferences.getString("time", "");
+  preferences.end();
+
+  if (settings.length() < 2 || settings[0] < '0' || settings[0] > '2') {
+    return;
+  }
+  const TimeZone* savedZone = findTimeZone(settings.c_str() + 1);
+  if (savedZone == nullptr) {
+    return;
+  }
+
+  configuredTimeZone = savedZone;
+  configuredDaylightSaving = static_cast<DaylightSaving>(settings[0] - '0');
+  timeZoneSaved = true;
+}
+
 void loadDisplaySettings() {
   // Theme IDs are stable NVS keys; pack both brightness bytes into one value.
   preferences.begin("brightness", true);
@@ -521,6 +547,7 @@ void appendPageStyles(String& page) {
   page += F("input:focus,select:focus{border-color:#2997ff;box-shadow:0 0 0 4px rgba(41,151,255,.18)}input[type=checkbox]{width:auto;margin:0 9px 0 0;accent-color:#0071e3}.check{display:flex;align-items:center;gap:0}.inline{display:grid;grid-template-columns:1fr 1fr;gap:12px}.inline label{min-width:0}");
   page += F(".color-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 12px}.color-field{min-width:0}.color-row{display:grid;grid-template-columns:34px 1fr;gap:10px;align-items:center}.swatch{display:block;width:30px;height:30px;border-radius:8px;border:1px solid rgba(255,255,255,.24);box-shadow:inset 0 0 0 1px rgba(0,0,0,.35)}");
   page += F("button,a.button{display:inline-block;border:1px solid rgba(255,255,255,.16);border-radius:999px;background:rgba(44,44,46,.9);color:#f5f5f7;padding:11px 15px;font-size:15px;font-weight:800;text-decoration:none;cursor:pointer;box-shadow:0 8px 20px rgba(0,0,0,.28)}button:hover,a.button:hover{border-color:#2997ff;color:#2997ff}button:disabled{opacity:.45;cursor:not-allowed}button:disabled:hover{border-color:rgba(255,255,255,.16);color:#f5f5f7}");
+  page += F("button[hidden]{display:none}#zone_status:empty{display:none}");
   page += F(".primary{width:100%;margin-top:20px;background:#0071e3;border-color:#0071e3;color:white}.primary:hover{background:#0077ed;color:white}.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}.actions.single{grid-template-columns:1fr}.actions .button{width:100%;text-align:center}");
   page += F(".uploadBox{position:relative;display:block;padding:28px 20px;margin-top:14px;text-align:center;background:rgba(44,44,46,.82);border:1px dashed rgba(255,255,255,.24);border-radius:8px;cursor:pointer}.uploadBox:hover,.uploadBox:focus-within{border-color:#2997ff;background:rgba(0,113,227,.12)}.uploadBox span{display:block;color:#f5f5f7;font-size:18px;font-weight:800}.uploadBox small{display:block;margin-top:5px;color:#a1a1a6;font-size:12px;font-weight:800;text-transform:uppercase}.uploadBox input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer}.fileStatus{margin-top:10px;color:#a1a1a6;font-size:13px;font-weight:800;overflow-wrap:anywhere}.fileStatus.ready{color:#30d158}.fileStatus.invalid{color:#ff453a}");
   page += F("progress{width:100%;height:24px;margin-top:18px;accent-color:#0071e3}.progress-text{font-weight:800;margin-top:8px;color:#2997ff}code{color:#2997ff}script{display:none}@media(max-width:620px){.page{padding:22px 14px 36px}h1{font-size:25px}.eyebrow{font-size:28px}nav{justify-content:center}.panel{padding:18px}.inline,.color-grid,.actions{grid-template-columns:1fr}}");
@@ -542,7 +569,7 @@ void appendPageHeader(String& page, const char* title, const char* activePath) {
 
 String configPage(const String& message = "") {
   String page;
-  page.reserve(7600);
+  page.reserve(30000);
   page += F("<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>");
   page += F("<title>Archer Clock</title><style>");
   appendPageStyles(page);
@@ -579,6 +606,54 @@ String configPage(const String& message = "") {
   page += F("<button class='primary' type='submit'>Save Wi-Fi and restart</button>");
   page += F("<div class='actions single'><a class='button' href='/clear'>Forget saved Wi-Fi</a></div>");
   page += F("</section></form>");
+  page += F("<form method='post' action='/time-settings'><section class='panel'><h2>Time Zone</h2>");
+  page += F("<label for='time_zone'>Time zone</label><select id='time_zone' name='time_zone' required data-saved='");
+  page += timeZoneSaved ? "1" : "0";
+  page += F("'><option>");
+  page += configuredTimeZone->name;
+  page += F("</option></select><div class='actions single'><button id='detect_zone' type='button' hidden>Use this device's time zone</button></div>");
+  page += F("<p id='zone_status' class='note' role='status'></p><label for='daylight_saving'>Daylight saving time</label>");
+  page += F("<select id='daylight_saving' name='daylight_saving'>");
+  const char* daylightLabels[] = {"Automatic", "Standard time", "Daylight time"};
+  for (uint8_t mode = 0; mode < 3; ++mode) {
+    page += F("<option value='");
+    page += String(mode);
+    page += "'";
+    if (mode == static_cast<uint8_t>(configuredDaylightSaving)) {
+      page += F(" selected");
+    }
+    page += ">";
+    page += daylightLabels[mode];
+    page += F("</option>");
+  }
+  page += F("</select><button class='primary' type='submit'>Save time settings</button></section></form>");
+  page += F("<script id='time_zone_names' type='text/plain'>");
+  for (const TimeZone& zone : TIME_ZONES) {
+    page += zone.name;
+    page += '\n';
+  }
+  page += F("</script><script>"
+    "(()=>{"
+    "const picker=document.getElementById('time_zone');"
+    "const current=picker.value;"
+    "picker.options.length=0;"
+    "for(const name of document.getElementById('time_zone_names').textContent.trim().split('\\n')){"
+    "picker.add(new Option(name.replace(/_/g,' '),name));}"
+    "picker.value=current;"
+    "const button=document.getElementById('detect_zone');"
+    "const status=document.getElementById('zone_status');"
+    "const detect=()=>{"
+    "let zone;"
+    "try{zone=Intl.DateTimeFormat().resolvedOptions().timeZone;}catch(error){}"
+    "if(!Array.from(picker.options).some(option=>option.value===zone)){"
+    "status.textContent='Choose your time zone from the list.';return;}"
+    "picker.value=zone;"
+    "status.textContent='Detected from this device. Save to apply.';};"
+    "button.hidden=false;"
+    "button.addEventListener('click',detect);"
+    "picker.addEventListener('change',()=>{status.textContent='';});"
+    "if(picker.dataset.saved==='0')detect();"
+    "})();</script>");
   page += F("<form method='post' action='/settings'>");
   page += F("<section class='panel'><h2>Scheduled Theme</h2>");
   page += F("<label class='check'><input name='scheduled_theme_enabled' type='checkbox' value='1'");
@@ -755,6 +830,33 @@ void handleConfigSave() {
   ESP.restart();
 }
 
+void handleTimeSettingsSave() {
+  String zoneName = configServer.arg("time_zone");
+  String mode = configServer.arg("daylight_saving");
+  const TimeZone* zone = findTimeZone(zoneName.c_str());
+  if (zone == nullptr || mode.length() != 1 || mode[0] < '0' || mode[0] > '2') {
+    configServer.send(400, "text/html", configPage("Choose a valid time zone and daylight saving setting."));
+    return;
+  }
+
+  // Store the zone and mode together so a failed write cannot mix settings.
+  String settings = mode + zoneName;
+  bool opened = preferences.begin("clock", false);
+  bool saved = opened && preferences.putString("time", settings) == settings.length();
+  if (opened) {
+    preferences.end();
+  }
+  if (!saved) {
+    configServer.send(500, "text/html", configPage("Could not save time settings."));
+    return;
+  }
+
+  configuredTimeZone = zone;
+  configuredDaylightSaving = static_cast<DaylightSaving>(mode[0] - '0');
+  timeZoneSaved = true;
+  configServer.send(200, "text/html", configPage("Time settings saved."));
+}
+
 void handleSettingsSave() {
   String requestedThemeId = configServer.arg("theme_id");
   if (requestedThemeId.length() > 0 && findThemePreset(requestedThemeId) == nullptr) {
@@ -916,6 +1018,7 @@ void startConfigWebServer() {
   configServer.on("/", HTTP_GET, handleConfigRoot);
   configServer.on("/firmware", HTTP_GET, handleFirmwareRoot);
   configServer.on("/save", HTTP_POST, handleConfigSave);
+  configServer.on("/time-settings", HTTP_POST, handleTimeSettingsSave);
   configServer.on("/settings", HTTP_POST, handleSettingsSave);
   configServer.on("/clear", HTTP_GET, handleConfigClear);
   configServer.on("/update", HTTP_POST, handleFirmwareUploadDone, handleFirmwareUpload);
@@ -1039,13 +1142,36 @@ bool hourInWindow(uint8_t currentHour, uint8_t startHour, uint8_t endHour) {
   return currentHour >= startHour || currentHour < endHour;
 }
 
+bool readLocalTime(struct tm& local, int16_t& offsetMinutes) {
+  time_t utc = time(nullptr);
+  if (utc < static_cast<time_t>(FIRST_TIME_ZONE_TIMESTAMP)) {
+    return false;
+  }
+
+  offsetMinutes = timeZoneOffset(*configuredTimeZone, static_cast<uint64_t>(utc), configuredDaylightSaving);
+  time_t adjusted = utc + static_cast<long>(offsetMinutes) * 60;
+  return gmtime_r(&adjusted, &local) != nullptr;
+}
+
+void setClockHands(const struct tm& local, int16_t offsetMinutes) {
+  hours = local.tm_hour % 12;
+  minutes = local.tm_min;
+  seconds = local.tm_sec;
+  trailHours = hours;
+  trailMinutes = minutes;
+  trailSeconds = seconds;
+  handsOffsetMinutes = offsetMinutes;
+  handsHaveLocalTime = true;
+}
+
 bool scheduledThemeIsActive() {
   if (!scheduledThemeEnabled) {
     return false;
   }
 
   struct tm timeinfo;
-  if (!getLocalTime(&timeinfo)) {
+  int16_t offsetMinutes;
+  if (!readLocalTime(timeinfo, offsetMinutes)) {
     return hourInWindow(hours, scheduledThemeStartHour, scheduledThemeEndHour);
   }
 
@@ -1120,6 +1246,7 @@ void draw(CRGB leds[], uint8_t s, uint8_t m, uint8_t h) {
 
 
 void syncronize() {
+  lastSyncAttempt = millis();
   setStatusLed(CRGB::Red);
   delay(500);
 
@@ -1134,18 +1261,17 @@ void syncronize() {
   startOta();
   #endif
 
-  // Configuration for synchronization with the NTP server
-  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+  configTzTime("UTC0", ntpServer);
   struct tm timeinfo;
-  if (!getLocalTime(&timeinfo)) return;
-  
-  hours = timeinfo.tm_hour % 12;
-  minutes = timeinfo.tm_min;
-  seconds = timeinfo.tm_sec;
-  trailHours = hours;
-  trailMinutes = minutes;
-  trailSeconds = seconds;
-  syncCountdown = SYNC_TIME;
+  int16_t offsetMinutes;
+  unsigned long waitStarted = millis();
+  while (!readLocalTime(timeinfo, offsetMinutes)) {
+    if (millis() - waitStarted >= 5000) {
+      return;
+    }
+    delay(10);
+  }
+  setClockHands(timeinfo, offsetMinutes);
 
   #ifdef DEBUG_NIGHT_MODE
   hours = 23;
@@ -1166,6 +1292,7 @@ void setup() {
   Serial.begin(115200);
   FastLED.addLeds<WS2812, LED_PIN, GRB>(leds, NUM_LEDS);
   FastLED.setCorrection(CRGB::White);
+  loadTimeSettings();
   loadDisplaySettings();
 
   // set global brightness (0..255)
@@ -1237,6 +1364,22 @@ void loop() {
   }
   previousMillis = currentMillis;
 
+  if (currentMillis - lastSyncAttempt >= SYNC_TIME * 60UL * 60UL * 1000UL) {
+    syncronize();
+    previousMillis = millis();
+    draw(leds, seconds, minutes, hours);
+    serviceNetwork();
+    return;
+  }
+
+  struct tm timeinfo;
+  int16_t offsetMinutes;
+  if (readLocalTime(timeinfo, offsetMinutes) &&
+      (!handsHaveLocalTime || handsOffsetMinutes != offsetMinutes)) {
+    setClockHands(timeinfo, offsetMinutes);
+    draw(leds, seconds, minutes, hours);
+    return;
+  }
 
   bool move_minutes = false;
   bool move_hours = false;
@@ -1245,7 +1388,6 @@ void loop() {
     move_minutes = true;
     if (minutes == 59) {
       move_hours = true;
-      syncCountdown--;
     }
   }
 
@@ -1330,7 +1472,6 @@ void loop() {
   } 
 
 
-  if (syncCountdown == 0) syncronize();
   serviceNetwork();
 }
 

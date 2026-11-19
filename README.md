@@ -23,9 +23,17 @@ With OTA enabled, the clock keeps Wi-Fi connected after NTP sync and advertises 
 
 The Settings page includes a Brightness section below Themes. Global LED brightness defaults to `255`, and marker LED brightness defaults to `128`; both accept whole numbers from `0` to `255`. Select a theme, adjust its brightness, and save display settings to remember those values across restarts. Selecting that theme again restores its saved brightness, which also applies when the theme runs on a schedule.
 
+### Time zone and daylight saving
+
+In **Settings → Time Zone**, choose your zone (for example, `Europe/Paris`) and select **Save time settings**. The page suggests your phone or computer's time zone when the clock has no saved choice. Use **Use this device's time zone** to detect it again or choose a zone manually. Saving applies the setting and keeps it across restarts. Clocks without a saved choice continue to use `America/Denver` until a zone is saved.
+
+**Automatic** follows the selected zone's daylight saving dates. **Standard time** and **Daylight time** use the zone's corresponding seasonal offset year-round. Zones with a fixed offset use that offset in all three modes.
+
+The firmware bundles IANA time zone data for 2024–2099 and applies it locally after synchronizing UTC over Wi-Fi. If a jurisdiction changes its rules, update the bundled data by running `python tools/build_time_zones.py path/to/tzdata.whl` with an updated tzdata wheel, then rebuild the firmware.
+
 ## Browser Firmware Installer
 
-At startup, the clock displays its installed version for five seconds before Wi-Fi synchronization: blue hour markers show the major version, amber minute markers show the minor version, and green second markers show the patch version. An unlit ring means zero. For v0.9.2, the hour ring is dark, nine minute markers are amber, and two second markers are green. Each ring can display up to twelve markers. The display uses a fixed brightness of 128, then restores the saved brightness.
+At startup, the clock displays its installed version for five seconds before Wi-Fi synchronization: blue hour markers show the major version, amber minute markers show the minor version, and green second markers show the patch version. An unlit ring means zero. For v0.9.3, the hour ring is dark, nine minute markers are amber, and three second markers are green. Each ring can display up to twelve markers. The display uses a fixed brightness of 128, then restores the saved brightness.
 
 [Open the hosted firmware installer](https://lerxtwood.github.io/ArcherClock2025E/) · [GitHub Releases](https://github.com/Lerxtwood/ArcherClock2025E/releases)
 
